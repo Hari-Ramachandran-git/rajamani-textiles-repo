@@ -1,0 +1,33 @@
+server {
+    listen ${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /health {
+        access_log off;
+        default_type application/json;
+        return 200 '{"status":"healthy"}';
+    }
+
+    # These static frontends use VITE_API_BASE_URL to reach the separate API.
+    location /api {
+        default_type application/json;
+        return 404 '{"error":"Set VITE_API_BASE_URL to the deployed backend URL and rebuild."}';
+    }
+
+    location /assets/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /images/ {
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}

@@ -1,6 +1,16 @@
-# Deploy the API on Railway
+# Deploy on Railway
 
-The root Dockerfile builds only the .NET backend. The two React apps can be hosted separately.
+Use three services from the same repository. All three use the repository root (`/`) as their root directory because the frontends share workspace dependencies, helpers and images.
+
+| Service | `RAILWAY_DOCKERFILE_PATH` variable | Storage |
+| --- | --- | --- |
+| API | `Dockerfile` | Persistent volume at `/data` |
+| Client | `apps/client/Dockerfile` | No volume |
+| Admin | `apps/admin/Dockerfile` | No volume |
+
+For **every service**, remove custom build and start commands. The Dockerfiles supply the correct runtime. In particular, an `npm` start command fails inside the .NET API image with “The executable npm could not be found.”
+
+Set the Dockerfile path variable explicitly for each service; a service name such as `@hari-nari/admin` does not select the correct image. See [Railway custom Dockerfile paths](https://docs.railway.com/variables/reference).
 
 ## Configure the service
 
@@ -21,6 +31,12 @@ Railway supplies `PORT`; the API binds to `0.0.0.0:$PORT`. Outside Railway, the 
 
 `DataDirectory` overrides the database directory (the Docker image sets `/data`). Without that setting, the API uses `RAILWAY_VOLUME_MOUNT_PATH` when available, otherwise its content root. `ConnectionStrings__Shop` overrides the entire connection string; if you use it, ensure its directory exists on the mounted volume.
 
+## Deploy the client and admin
+
+Create or reuse the two frontend services. Configure their Dockerfile path using the table above, keep the root directory at `/`, and clear the custom build/start commands. If the service is explicitly set to Railpack, select Dockerfile as the builder. Both Dockerfiles use Node only to build; Nginx serves the final static app and binds to Railway's `PORT`.
+
+Set `/health` as each frontend's healthcheck path. Generate public domains for both services and add those exact origins to the API's `AllowedOrigins` variable. Redeploy the API after changing origins.
+
 ## Connect the React apps
 
 Set this build-time variable for **both** frontend deployments, then rebuild:
@@ -28,6 +44,8 @@ Set this build-time variable for **both** frontend deployments, then rebuild:
 ```dotenv
 VITE_API_BASE_URL=https://YOUR-API-DOMAIN/api
 ```
+
+Railway passes this variable to the frontend Docker builds as a build argument. The build stops with a clear error if it is missing. Updating the URL requires a new build.
 
 Copy the pattern from `apps/client/.env.example` and `apps/admin/.env.example` for local configuration. If the variable is unset, requests use `/api` on the frontend's origin. The Vite proxy is only for local development. Frontend product images remain bundled with each frontend.
 
@@ -47,3 +65,14 @@ docker run --rm -p 8080:8080 -e AdminKey \
 Visit `http://localhost:8080/health`. Use `VITE_API_BASE_URL=http://localhost:8080/api` for the local frontends if testing against this container instead of the usual port-5000 API.
 
 References: [Railway Dockerfiles](https://docs.railway.com/builds/dockerfiles), [healthchecks](https://docs.railway.com/deployments/healthchecks), and [volumes](https://docs.railway.com/volumes/reference).
+
+
+To build the frontend containers locally:
+
+```sh
+docker build -f apps/client/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:8080/api -t hari-nari-client .
+docker build -f apps/admin/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:8080/api -t hari-nari-admin .
+docker run --rm -p 5173:8080 hari-nari-client
+# In another terminal:
+docker run --rm -p 5174:8080 hari-nari-admin
+```
