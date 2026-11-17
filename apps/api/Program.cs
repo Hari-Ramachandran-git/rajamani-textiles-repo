@@ -78,6 +78,12 @@ using (var scope = app.Services.CreateScope())
 }
 // Run CORS before the admin key check so browser preflights can complete.
 app.UseCors();
+// The root Docker image bundles both React apps alongside the API.
+if (Directory.Exists(app.Environment.WebRootPath))
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
 app.MapGet("/health", async (ShopDb db) =>
 {
     try
@@ -140,6 +146,13 @@ admin.MapPatch("/orders/{id:int}", async (int id, StatusInput input, ShopDb db) 
     var order = await db.Orders.FindAsync(id); if (order is null) return Results.NotFound();
     order.Status = input.Status; await db.SaveChangesAsync(); return Results.Ok(order);
 });
+// API typos must return 404 rather than the customer application's HTML.
+app.MapMethods("/api/{**path}", ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], () => Results.NotFound());
+if (Directory.Exists(app.Environment.WebRootPath))
+{
+    app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+    app.MapFallbackToFile("index.html");
+}
 app.Run();
 
 class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options)

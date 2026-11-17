@@ -1,78 +1,50 @@
-# Deploy on Railway
+# Deploy the complete site on Railway
 
-Use three services from the same repository. All three use the repository root (`/`) as their root directory because the frontends share workspace dependencies, helpers and images.
+One Railway service runs both React apps and the .NET API. The root Dockerfile builds the customer app at `/`, the admin app at `/admin/`, and serves the API under `/api`.
 
-| Service | `RAILWAY_DOCKERFILE_PATH` variable | Storage |
-| --- | --- | --- |
-| API | `Dockerfile` | Persistent volume at `/data` |
-| Client | `apps/client/Dockerfile` | No volume |
-| Admin | `apps/admin/Dockerfile` | No volume |
+## Configure your existing service
 
-For **every service**, remove custom build and start commands. The Dockerfiles supply the correct runtime. In particular, an `npm` start command fails inside the .NET API image with “The executable npm could not be found.”
+1. Select `rajamani-textiles-repo` from GitHub, branch `main`. Keep Root Directory `/`.
+2. Set `RAILWAY_DOCKERFILE_PATH` to `Dockerfile`. Remove custom build/start commands. If a builder is explicitly selected, use Dockerfile.
+3. Attach a persistent volume with mount path `/data`. Keep one replica for SQLite.
+4. Set `AdminKey` to a long random secret. This is required in Production; enter it in the admin page to connect.
+5. Set the healthcheck path to `/health`, with a 120-second timeout. Keep the generated public domain's target port at 8080, or match the service's `PORT` if customized.
+6. Deploy the latest commit and apply any pending Railway changes.
 
-Set the Dockerfile path variable explicitly for each service; a service name such as `@hari-nari/admin` does not select the correct image. See [Railway custom Dockerfile paths](https://docs.railway.com/variables/reference).
+Both frontends call `/api` on the same domain. You do not need `VITE_API_BASE_URL`, `AllowedOrigins`, or additional frontend services for this setup. The root Dockerfile builds with the same-origin API URL explicitly. You can remove frontend URL variables left over from a separate-services setup.
 
-## Configure the service
+## Open your site
 
-1. Create a Railway service from this Git repository. Keep its root directory at the repository root (`/`), so Railway detects `Dockerfile`. Leave build/start command overrides empty.
-2. Attach a persistent volume mounted at `/data`. SQLite writes `/data/shop.db`; without a volume, redeploying loses changes made in the container filesystem. Keep this SQLite service at one replica.
-3. Add these service variables:
+For the existing Railway domain:
 
-   | Variable | Value |
-   | --- | --- |
-   | `AdminKey` | A long, randomly generated secret; enter it only in the admin app |
-   | `AllowedOrigins` | Customer and admin origins, comma-separated, for example `https://shop.example.com,https://admin.example.com` |
+- Customer: https://rajamani-textiles-repo-production.up.railway.app/
+- Admin: https://rajamani-textiles-repo-production.up.railway.app/admin/
+- Health: https://rajamani-textiles-repo-production.up.railway.app/health
+- Products: https://rajamani-textiles-repo-production.up.railway.app/api/products
 
-   Origins must include the scheme and have no path or trailing slash. Localhost origins are automatically allowed only in Development. Do not put `AdminKey` in a `VITE_` variable or commit it.
-4. Set the healthcheck path to `/health` and timeout to 120 seconds. The endpoint checks database connectivity and returns 200 when healthy or 503 on failure.
-5. Deploy, then generate a public domain in the service's Networking settings. Check `https://YOUR-DOMAIN/health` and `https://YOUR-DOMAIN/api/products`.
+The admin web page is public, while admin data and actions require `AdminKey`. Do not put that secret into a `VITE_` variable or commit it.
 
-Railway supplies `PORT`; the API binds to `0.0.0.0:$PORT`. Outside Railway, the container defaults to port 8080. Production refuses to start without `AdminKey`. The API initializes and upgrades its SQLite schema at application startup, when the volume is mounted.
+## Storage and runtime
 
-`DataDirectory` overrides the database directory (the Docker image sets `/data`). Without that setting, the API uses `RAILWAY_VOLUME_MOUNT_PATH` when available, otherwise its content root. `ConnectionStrings__Shop` overrides the entire connection string; if you use it, ensure its directory exists on the mounted volume.
+The image uses `/data/shop.db`. The mounted volume retains products and orders through redeployments. Database initialization runs at application startup, when the volume is available. `DataDirectory` overrides the default directory; `ConnectionStrings__Shop` overrides the complete SQLite connection string.
 
-## Deploy the client and admin
+The API listens on Railway's `PORT` at `0.0.0.0`; the container defaults to 8080 elsewhere. `/health` returns 200 when the database is reachable, or 503 on failure.
 
-Create or reuse the two frontend services. Configure their Dockerfile path using the table above, keep the root directory at `/`, and clear the custom build/start commands. If the service is explicitly set to Railpack, select Dockerfile as the builder. Both Dockerfiles use Node only to build; Nginx serves the final static app and binds to Railway's `PORT`.
+## Run the complete container locally
 
-Set `/health` as each frontend's healthcheck path. Generate public domains for both services and add those exact origins to the API's `AllowedOrigins` variable. Redeploy the API after changing origins.
-
-## Connect the React apps
-
-Set this build-time variable for **both** frontend deployments, then rebuild:
-
-```dotenv
-VITE_API_BASE_URL=https://YOUR-API-DOMAIN/api
-```
-
-Railway passes this variable to the frontend Docker builds as a build argument. The build stops with a clear error if it is missing. Updating the URL requires a new build.
-
-Copy the pattern from `apps/client/.env.example` and `apps/admin/.env.example` for local configuration. If the variable is unset, requests use `/api` on the frontend's origin. The Vite proxy is only for local development. Frontend product images remain bundled with each frontend.
-
-## Check the container locally
-
-From the repository root, with Docker running:
+With Docker running, from the repository root:
 
 ```sh
-docker build -t hari-nari-api .
-docker volume create hari-nari-data
-# Set AdminKey in your shell first; -e passes its value without embedding it in the image.
-docker run --rm -p 8080:8080 -e AdminKey \
-  -e AllowedOrigins=http://localhost:5173,http://localhost:5174 \
-  -v hari-nari-data:/data hari-nari-api
+docker build -t rajamani-textiles .
+docker volume create rajamani-data
+# Set AdminKey in your shell before running this command.
+docker run --rm -p 8080:8080 -e AdminKey -v rajamani-data:/data rajamani-textiles
 ```
 
-Visit `http://localhost:8080/health`. Use `VITE_API_BASE_URL=http://localhost:8080/api` for the local frontends if testing against this container instead of the usual port-5000 API.
+Open `http://localhost:8080/` and `http://localhost:8080/admin/`.
+
+## Optional: separate frontend services
+
+The standalone `apps/client/Dockerfile` and `apps/admin/Dockerfile` remain available if you later want separate frontend domains. Use repository root `/` for both services, select their Dockerfile using `RAILWAY_DOCKERFILE_PATH`, and clear custom build/start commands. Set `VITE_API_BASE_URL` to your API's public URL including `/api` before building. Set the API's `AllowedOrigins` to their exact HTTPS origins, comma-separated without trailing slashes. Standalone frontend containers use Nginx with `/health` and Railway's `PORT`, and need no volumes.
 
 References: [Railway Dockerfiles](https://docs.railway.com/builds/dockerfiles), [healthchecks](https://docs.railway.com/deployments/healthchecks), and [volumes](https://docs.railway.com/volumes/reference).
-
-
-To build the frontend containers locally:
-
-```sh
-docker build -f apps/client/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:8080/api -t hari-nari-client .
-docker build -f apps/admin/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:8080/api -t hari-nari-admin .
-docker run --rm -p 5173:8080 hari-nari-client
-# In another terminal:
-docker run --rm -p 5174:8080 hari-nari-admin
-```

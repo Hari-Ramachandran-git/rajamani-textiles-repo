@@ -49,8 +49,8 @@ Validation: both frontend production builds and the .NET build pass. API smoke c
 
 The storefront follows the cream, burgundy and gold direction of the supplied reference, with locally stored product photos in `apps/client/public/images`. The admin app can edit photo URLs. Startup upgrades the initial six-product demo catalog to home textiles while preserving order history; other existing catalogs are left intact.
 
-## Deploy the backend
+## Deploy on Railway
 
-The root [Dockerfile](Dockerfile) deploys the API on Railway or any Docker host. It supports Railway's `PORT`, persistent SQLite storage, `/health`, and configurable CORS. Follow the [Railway setup](docs/railway.md) to attach a `/data` volume, set `AdminKey` and `AllowedOrigins`, and connect both frontends using `VITE_API_BASE_URL`.
+The root [Dockerfile](Dockerfile) runs the complete site in one service: the customer app at `/`, the admin app at `/admin/`, and the .NET API at `/api`. Attach a volume at `/data`, set `AdminKey`, keep the service root at `/`, clear custom build/start commands, and use `/health` for the healthcheck. See the [Railway setup](docs/railway.md).
 
-For Railway-hosted frontends, use `apps/client/Dockerfile` and `apps/admin/Dockerfile` with the repository root as build context. These build with Node and serve with Nginx. Clear custom start commands and set `VITE_API_BASE_URL` before building; see the service settings table in the [Railway setup](docs/railway.md).
+Separate frontend Dockerfiles are also available for optional deployments to different domains.
