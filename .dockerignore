@@ -1,0 +1,13 @@
+**
+!apps/
+!apps/api/
+!apps/api/**
+!Dockerfile
+apps/api/bin/
+apps/api/obj/
+apps/api/Properties/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/.env
+**/.env.*

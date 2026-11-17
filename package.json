@@ -1,0 +1,14 @@
+{
+  "name": "hari-nari",
+  "private": true,
+  "workspaces": [
+    "apps/admin",
+    "apps/client"
+  ],
+  "scripts": {
+    "dev:api": "dotnet run --project apps/api",
+    "dev:client": "npm run dev -w apps/client",
+    "dev:admin": "npm run dev -w apps/admin",
+    "build": "npm run build --workspaces"
+  }
+}
