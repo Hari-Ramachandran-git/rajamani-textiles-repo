@@ -1,4 +1,4 @@
-# Hari Nari
+# RajamaniTextiles
 
 A barebones textile marketplace: two React + Zustand web apps and a C# .NET 10 API backed by SQLite. Plain CSS, no template engine.
 
